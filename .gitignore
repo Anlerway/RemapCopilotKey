@@ -1,0 +1,89 @@
+# ---------------------------------------------------------------------------
+# RemapCopilotKey - Git 排除规则
+#
+# 约定：
+#   1) 编译产物（中间文件、可执行文件、符号、日志）一律不入库
+#   2) 改动文档 / 变更记录不入库（见文件末尾「改动文档」小节）
+# ---------------------------------------------------------------------------
+
+# --- 通用编译产物 ---------------------------------------------------------
+[Bb]uild/
+[Oo]ut/
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+# 生产版打包产物（tools\package.ps1 输出到这里）
+[Aa]rtifacts/
+x64/
+x86/
+ARM64/
+*.exe
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.obj
+*.o
+*.a
+*.res
+*.tlog
+*.lastbuildstate
+*.log
+*.idb
+*.pch
+*.bsc
+*.map
+
+# --- Visual Studio --------------------------------------------------------
+.vs/
+*.user
+*.suo
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+*.opendb
+*.aps
+*.ncb
+*.sdf
+*.opensdf
+*.cachefile
+UpgradeLog*.htm
+UpgradeLog*.XML
+
+# --- .NET / C# ------------------------------------------------------------
+src/Configurator/bin/
+src/Configurator/obj/
+*.userprefs
+project.lock.json
+*.nuget.g.props
+*.nuget.g.targets
+
+# --- 运行期产物 -----------------------------------------------------------
+# 服务程序运行日志
+*.runtime.log
+logs/
+log/
+
+# --- 侦察 / 临时产物 ------------------------------------------------------
+_recon/
+scratch/
+tmp/
+*.tmp
+
+# --- 改动文档 -------------------------------------------------------------
+# 按需求：改动文档不入库。
+# 如需让某个文档入库，用 `git add -f <文件>` 强制加入。
+CHANGELOG*
+docs/changes/
+docs/改动记录/
+*.changes.md
+*.changelog.md
+
+# --- 代码签名私钥与证书 -----------------------------------------------
+# 绝对不能入库；用 tools\sign.ps1 在仓库外管理
+*.pfx
+*.p12
+*.pvk
+*.snk

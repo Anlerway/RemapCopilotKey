@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+
+  <assemblyIdentity
+      type="win32"
+      name="RemapCopilotKey.Service"
+      version="1.0.0.0"
+      processorArchitecture="*"/>
+
+  <description>RemapCopilotKey Service</description>
+
+  <!--
+    服务程序固定以管理员权限运行。
+
+    原因：低级键盘钩子（WH_KEYBOARD_LL）受 UIPI 限制，非提升进程看不到送往提升窗口
+    的输入。要覆盖所有窗口，服务必须始终是管理员。
+
+    开机自启不走这个清单（否则每次登录都会弹 UAC），而是由注册的计划任务以
+    RunLevel=HighestAvailable 启动，登录时静默提权、不弹 UAC。
+    该计划任务由**配置程序** RemapCopilotKey.exe 注册与删除，
+    实现见 src/Configurator/AutoStart.cs（服务程序侧已不再处理）。
+
+    注意：这里的"管理员权限"是**服务自身**的。配套界面里那个"以管理员权限运行"
+    开关控制的是**被打开的目标程序**是否需要提权（ShellExecute 的 runas 动词）。
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+    </application>
+  </compatibility>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor</dpiAwareness>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+
+</assembly>

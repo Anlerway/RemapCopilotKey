@@ -1,0 +1,318 @@
+<Window x:Class="RemapCopilotKey.Configurator.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RemapCopilotKey.Configurator"
+        Title="RemapCopilotKey"
+        Icon="app.ico"
+        Width="800"
+        SizeToContent="Height"
+        MinWidth="700" MinHeight="420"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBackgroundBrush}"
+        FontFamily="Segoe UI, Microsoft YaHei UI"
+        FontSize="14">
+
+    <!-- 两行：可滚动内容 / 固定在底部的操作栏 -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="0,0,0,8">
+            <StackPanel Margin="24,16,24,12">
+
+                <!-- ============ 标题 + 语言 ============ -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="TitleText" Style="{StaticResource TitleText}" Text="RemapCopilotKey" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="LanguageLabel" Style="{StaticResource FieldLabel}" Text="界面语言：" />
+                        <ComboBox x:Name="LanguageCombo"
+                                  Style="{StaticResource ComboInput}"
+                                  Width="160"
+                                  SelectionChanged="OnLanguageSelectionChanged" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- ============ 映射动作 ============ -->
+                <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="MappingCardTitle" Style="{StaticResource SectionTitleText}" Text="映射动作" />
+
+                        <!-- (1) 映射为按键 -->
+                        <RadioButton x:Name="RadioSendKey"
+                                     Style="{StaticResource ActionRadio}"
+                                     GroupName="ActionType"
+                                     Margin="0,14,0,0"
+                                     Content="映射为按键"
+                                     Checked="OnActionTypeChanged" />
+                        <StackPanel Orientation="Horizontal" Margin="24,8,0,0">
+                            <local:HotkeyBox x:Name="HotkeySendKey" Width="180" />
+                            <Button x:Name="ButtonClearSendKey"
+                                    Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0"
+                                    Content="清空"
+                                    Click="OnClearSendKeyClick" />
+                            <Button x:Name="ButtonCancelSendKey"
+                                    Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0"
+                                    Content="取消捕获"
+                                    Click="OnCancelSendKeyClick" />
+                        </StackPanel>
+
+                        <!-- (2) 映射为组合键 -->
+                        <RadioButton x:Name="RadioSendChord"
+                                     Style="{StaticResource ActionRadio}"
+                                     GroupName="ActionType"
+                                     Margin="0,14,0,0"
+                                     Content="映射为组合键"
+                                     Checked="OnActionTypeChanged" />
+                        <Grid Margin="24,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <local:HotkeyBox x:Name="HotkeyChord0" Grid.Column="0" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource BodyText}" Margin="8,0" VerticalAlignment="Center" Text="+" />
+                            <local:HotkeyBox x:Name="HotkeyChord1" Grid.Column="2" />
+                            <TextBlock Grid.Column="3" Style="{StaticResource BodyText}" Margin="8,0" VerticalAlignment="Center" Text="+" />
+                            <local:HotkeyBox x:Name="HotkeyChord2" Grid.Column="4" />
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="24,8,0,0">
+                            <Button x:Name="ButtonClearChord"
+                                    Style="{StaticResource SmallButton}"
+                                    Content="清空"
+                                    Click="OnClearChordClick" />
+                            <Button x:Name="ButtonCancelChord"
+                                    Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0"
+                                    Content="取消捕获"
+                                    Click="OnCancelChordClick" />
+                        </StackPanel>
+
+                        <!-- (3) Windows 实用功能 -->
+                        <RadioButton x:Name="RadioSystemAction"
+                                     Style="{StaticResource ActionRadio}"
+                                     GroupName="ActionType"
+                                     Margin="0,12,0,0"
+                                     Content="Windows 实用功能"
+                                     Checked="OnActionTypeChanged" />
+                        <Grid Margin="24,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="SystemActionLabel" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="功能：" />
+                            <ComboBox x:Name="SystemActionCombo"
+                                      Grid.Column="1"
+                                      Style="{StaticResource ComboInput}"
+                                      MaxWidth="420"
+                                      HorizontalAlignment="Left"
+                                      MinWidth="280"
+                                      IsEnabled="{Binding IsChecked, ElementName=RadioSystemAction}" />
+                        </Grid>
+
+                        <!-- (4) 打开应用程序 -->
+                        <RadioButton x:Name="RadioOpenApp"
+                                     Style="{StaticResource ActionRadio}"
+                                     GroupName="ActionType"
+                                     Margin="0,12,0,0"
+                                     Content="打开应用程序"
+                                     Checked="OnActionTypeChanged" />
+                        <Grid Margin="24,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="AppPathLabel" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="程序路径：" />
+                            <TextBox x:Name="AppPathBox"
+                                     Grid.Column="1"
+                                     Style="{StaticResource InputBox}"
+                                     IsEnabled="{Binding IsChecked, ElementName=RadioOpenApp}" />
+                            <Button x:Name="BrowseButton"
+                                    Grid.Column="2"
+                                    Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0"
+                                    Content="浏览…"
+                                    IsEnabled="{Binding IsChecked, ElementName=RadioOpenApp}"
+                                    Click="OnBrowseClick" />
+                        </Grid>
+                        <Grid Margin="24,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="AppArgsLabel" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="启动参数：" />
+                            <TextBox x:Name="AppArgsBox"
+                                     Grid.Column="1"
+                                     Style="{StaticResource InputBox}"
+                                     IsEnabled="{Binding IsChecked, ElementName=RadioOpenApp}" />
+                        </Grid>
+                        <StackPanel Margin="24,10,0,0">
+                            <CheckBox x:Name="CheckRunAsAdmin"
+                                      Style="{StaticResource OptionCheck}"
+                                      Content="以管理员权限运行（会弹一次 UAC）"
+                                      IsEnabled="{Binding IsChecked, ElementName=RadioOpenApp}" />
+                            <CheckBox x:Name="CheckToggleWindow"
+                                      Style="{StaticResource OptionCheck}"
+                                      Margin="0,8,0,0"
+                                      Content="已在运行时最小化 / 还原它的窗口"
+                                      IsEnabled="{Binding IsChecked, ElementName=RadioOpenApp}" />
+                        </StackPanel>
+
+                        <!-- (5) 打开网页 -->
+                        <RadioButton x:Name="RadioOpenUrl"
+                                     Style="{StaticResource ActionRadio}"
+                                     GroupName="ActionType"
+                                     Margin="0,12,0,0"
+                                     Content="打开网页"
+                                     Checked="OnOpenUrlChecked" />
+                        <Grid Margin="24,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="UrlLabel" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="网址：" />
+                            <TextBox x:Name="UrlBox"
+                                     Grid.Column="1"
+                                     Style="{StaticResource InputBox}"
+                                     IsEnabled="{Binding IsChecked, ElementName=RadioOpenUrl}" />
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ============ 常规设置 ============ -->
+                <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="GeneralCardTitle" Style="{StaticResource SectionTitleText}" Text="常规设置" />
+
+                        <CheckBox x:Name="CheckEnabled"
+                                  Style="{StaticResource OptionCheck}"
+                                  Margin="0,14,0,0"
+                                  Content="启用映射" />
+
+                        <CheckBox x:Name="CheckReloadOnChange"
+                                  Style="{StaticResource OptionCheck}"
+                                  Margin="0,8,0,0"
+                                  Content="配置文件变化时自动重新加载" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock x:Name="LogLevelLabel" Style="{StaticResource FieldLabel}" Text="日志级别：" />
+                            <ComboBox x:Name="LogLevelCombo"
+                                      Style="{StaticResource ComboInput}"
+                                      Width="200" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ============ 服务管理 ============ -->
+                <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="ServiceCardTitle" Style="{StaticResource SectionTitleText}" Text="服务管理" />
+
+                        <WrapPanel Margin="0,14,0,0">
+                            <Button x:Name="ButtonStartService"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="启动服务"
+                                    Click="OnStartServiceClick" />
+                            <Button x:Name="ButtonStopService"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="停止服务"
+                                    Click="OnStopServiceClick" />
+                            <Button x:Name="ButtonRegisterService"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="注册服务"
+                                    Click="OnRegisterServiceClick" />
+                            <Button x:Name="ButtonRemoveService"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="结束并清除服务"
+                                    Click="OnRemoveServiceClick" />
+                        </WrapPanel>
+
+                        <TextBlock x:Name="ServiceStatusText"
+                                   Style="{StaticResource BodyText}"
+                                   Margin="0,6,0,0"
+                                   FontWeight="SemiBold"
+                                   Text="服务未运行" />
+
+                        <TextBlock x:Name="ConfigPathText"
+                                   Style="{StaticResource CaptionText}"
+                                   Margin="0,4,0,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   Text="配置文件：" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ============ 固定底部操作栏 ============ -->
+        <Border Grid.Row="1"
+                Background="{StaticResource CardBackgroundBrush}"
+                BorderBrush="{StaticResource CardBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="24,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="ButtonProjectUrl"
+                        Grid.Column="0"
+                        Style="{StaticResource SecondaryButton}"
+                        Content="打开开源地址"
+                        VerticalAlignment="Center"
+                        Click="OnProjectUrlClick" />
+
+                <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusText"
+                               Style="{StaticResource BodyText}"
+                               FontSize="13"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="ButtonSave"
+                            Style="{StaticResource PrimaryButton}"
+                            MinWidth="100"
+                            Content="保存"
+                            Click="OnSaveClick" />
+                    <Button x:Name="ButtonReload"
+                            Style="{StaticResource SecondaryButton}"
+                            MinWidth="100"
+                            Margin="8,0,0,0"
+                            Content="重新读取"
+                            Click="OnReloadClick" />
+                    <Button x:Name="ButtonClose"
+                            Style="{StaticResource SecondaryButton}"
+                            MinWidth="100"
+                            Margin="8,0,0,0"
+                            Content="关闭"
+                            Click="OnCloseClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

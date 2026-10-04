@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# RemapCopilotKey - 编辑器统一约定
+#
+# 最重要的两条（详见 docs/开发笔记.md）：
+#   * .cmd/.bat 必须 CRLF，否则 cmd.exe 解析会错乱
+#   * .ps1 必须带 UTF-8 BOM，否则 Windows PowerShell 5.1 按 GBK 解码会崩
+# ---------------------------------------------------------------------------
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# 批处理只能是 ASCII + CRLF
+[*.{cmd,bat}]
+end_of_line = crlf
+charset = ascii
+
+# PowerShell 需要 BOM（charset=utf-8-bom 由编辑器负责写入）
+[*.ps1]
+end_of_line = crlf
+charset = utf-8-bom
+
+[*.{yml,yaml,json,md}]
+indent_size = 2
+
+[*.{csproj,vcxproj,props,targets,sln}]
+indent_size = 2
+
+[*.cs]
+indent_size = 4
+dotnet_sort_system_directives_first = true
+csharp_new_line_before_open_brace = all
+csharp_style_namespace_declarations = file_scoped:warning
+
+[*.{cpp,h,hpp,c}]
+indent_size = 4
+indent_style = space
+
+[*.md]
+trim_trailing_whitespace = false

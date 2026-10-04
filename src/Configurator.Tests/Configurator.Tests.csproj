@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- 与配置程序同一个目标框架：测试跑的就是实际发布的那个程序集形态 -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ConfigContractTests</AssemblyName>
+    <RootNamespace>RemapCopilotKey.Tests</RootNamespace>
+    <!-- 控制台程序不需要 WPF，但也就不再自动带上 System.IO，显式补一项 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <!--
+    这是一个控制台测试，直接复用配置程序的源码（而不是引用它的 WPF 程序集），
+    这样可以在没有图形界面的环境里验证 JSON 契约 —— 也就是
+    "配置程序写出的 JSON" 能否被 "C++ 服务程序" 正确读回。
+
+    AppConfig.cs / Json.cs / Localization.cs / KeyCatalog.cs 都不依赖 WPF，可以直接编译。
+    Compat.cs 提供 net48 上 C# 9 record / init 需要的 IsExternalInit。
+  -->
+  <ItemGroup>
+    <Compile Include="..\Configurator\AppConfig.cs" Link="AppConfig.cs" />
+    <Compile Include="..\Configurator\Compat.cs" Link="Compat.cs" />
+    <Compile Include="..\Configurator\Json.cs" Link="Json.cs" />
+    <Compile Include="..\Configurator\Localization.cs" Link="Localization.cs" />
+    <Compile Include="..\Configurator\KeyCatalog.cs" Link="KeyCatalog.cs" />
+    <EmbeddedResource Include="..\Configurator\Lang\*.json" LinkBase="Lang" />
+  </ItemGroup>
+
+</Project>

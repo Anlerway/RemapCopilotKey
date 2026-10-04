@@ -1,0 +1,105 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      WPF 桌面程序，目标 .NET Framework 4.8。
+
+      为什么从 .NET 8 换成 net48：
+        * net48 是 Win10 1903+ / Win11 **系统自带**的组件，不需要目标机器安装
+          任何 .NET 运行时，因此发布包只有几百 KB，而不像自包含 .NET 8 那样
+          要带上 200 多个运行时文件（~70 MB）。
+        * 少一份运行时 = 少一类环境问题：不用再区分"自带运行时版"和
+          "框架依赖版"两个包，也不会因为 .NET 8 Desktop Runtime 版本不对而启动失败。
+    -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+
+    <!-- 用户看到的主程序名：RemapCopilotKey.exe -->
+    <AssemblyName>RemapCopilotKey</AssemblyName>
+    <RootNamespace>RemapCopilotKey.Configurator</RootNamespace>
+    <Product>RemapCopilotKey</Product>
+    <AssemblyTitle>RemapCopilotKey 配置程序</AssemblyTitle>
+    <Company>Anlerway</Company>
+    <Description>把 Copilot 键映射成任意按键、组合键、应用程序、网页或 Windows 实用功能</Description>
+    <Copyright>https://github.com/Anlerway/RemapCopilotKey</Copyright>
+    <RepositoryUrl>https://github.com/Anlerway/RemapCopilotKey</RepositoryUrl>
+    <Version>1.0.0</Version>
+
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!--
+      程序图标。两处用途，缺一不可：
+        * ApplicationIcon：嵌进 exe 的 RT_ICON / RT_GROUP_ICON 资源，
+          资源管理器、任务栏、Alt+Tab 看到的都是它。
+        * <Resource> + Window.Icon：窗口左上角与任务栏的 WPF 图标。
+      服务程序**不要图标**（它没有窗口、没有托盘，后台静默运行），
+      所以图标只加在这个工程里。
+    -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+
+    <!--
+      net48 的 SDK 风格工程默认不带隐式 using，也不带 C# 9 的 init 访问器支持，
+      两者都在这里显式打开（IsExternalInit 由 Compat.cs 提供）。
+      Nullable 沿用原来的设置：这些注解在 net48 上纯属文档性质，但留着能让
+      "这里可能为 null" 的意图继续写在代码里。
+    -->
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      刻意**不引用任何 NuGet 包**（包括 Microsoft.NETFramework.ReferenceAssemblies）：
+      引用程序集直接取自本机 Visual Studio 自带的 .NET Framework 4.8 Targeting Pack。
+      这样构建完全离线可用，也不需要额外下载。
+    -->
+
+    <!--
+      配置文件与日志用 UTF-8 写成可读中文
+    -->
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      net48 + WPF 的隐式 using 比 net8.0-windows + WinForms 少一项 System.IO
+      （见 obj 下的 *.GlobalUsings.g.cs），显式补上，代码里就不必到处写 using System.IO。
+    -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      计划任务的 COM 接口（taskschd，GUID 见 taskschd.idl）。
+      用 tlbimp 从系统类型库生成互操作程序集 —— 不手写 vtable 声明。
+
+      为什么非用它不可：任务的登录方式（TASK_LOGON_INTERACTIVE_TOKEN）必须通过
+      RegisterTaskDefinition 的**参数**传进去，任务定义 XML 里表达不出来
+      （XML 的 schema 禁止 <GroupId> 和 <LogonType> 同时出现）。详见 AutoStart.cs 顶部。
+    -->
+    <COMReference Include="TaskScheduler">
+      <Guid>{E34CB9F1-C7F7-424C-BE29-027DCC09363A}</Guid>
+      <VersionMajor>1</VersionMajor>
+      <VersionMinor>0</VersionMinor>
+      <Lcid>0</Lcid>
+      <WrapperTool>tlbimp</WrapperTool>
+      <Isolated>False</Isolated>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </COMReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 语言包：新增语言只需往 Lang\ 里丢一个 JSON，无需改代码 -->
+    <EmbeddedResource Include="Lang\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      窗口图标。用 LogicalName 固定资源名，XAML 里才能写成一个稳定的相对 URI
+      （否则资源名会变成 "RemapCopilotKey.Configurator.Assets.app.ico"，太长且随
+      RootNamespace 变化）。
+    -->
+    <Resource Include="Assets\app.ico" LogicalName="app.ico" />
+  </ItemGroup>
+
+</Project>

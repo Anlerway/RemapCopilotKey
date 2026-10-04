@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 配置程序是 .NET Framework 4.8 的 WPF 工程，C++ 服务程序是 vcxproj，
+      # 两者都由 Visual Studio 自带的 MSBuild 编译 —— 不需要 .NET SDK，
+      # 也不需要 NuGet 包（net48 引用程序集来自 VS 的 Targeting Pack）。
+      #
+      # 注意：GitHub 的 windows-latest 镜像没装 .NET Framework 4.8 Targeting Pack
+      # 的完整组合，但 windows-2022/2025 镜像自带 VS 2022+ 与 net48 引用程序集，
+      # setup-msbuild 之后 build.ps1 会通过 vswhere 自行定位。
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # 构建 + 全部单元测试（含 C# 写配置 / C++ 读回来的跨语言闭环）
+      - name: Build and test
+        run: .\build.cmd
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: RemapCopilotKey-binaries
+          path: build/out
+          if-no-files-found: error
+
+      # 生产版打包：绿色包 + SHA256 校验值（安装程序需要 Inno Setup，
+      # CI 镜像里没有，脚本会自动跳过，不算失败）
+      - name: Package release
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1 -SkipBuild -NoInstaller
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RemapCopilotKey-release
+          path: artifacts/release/*
+          if-no-files-found: error

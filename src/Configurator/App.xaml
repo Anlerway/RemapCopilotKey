@@ -1,0 +1,13 @@
+<Application x:Class="RemapCopilotKey.Configurator.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 不使用 StartupUri：启动流程（单实例 + 可选的语言）在 App.xaml.cs 的 OnStartup 中控制 -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 全局界面样式（浅色 Win11 风格） -->
+                <ResourceDictionary Source="Themes/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
