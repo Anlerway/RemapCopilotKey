@@ -36,10 +36,9 @@ jobs:
           path: build/out
           if-no-files-found: error
 
-      # 生产版打包：绿色包 + SHA256 校验值（安装程序需要 Inno Setup，
-      # CI 镜像里没有，脚本会自动跳过，不算失败）
+      # 生产版打包：绿色包 + SHA256 校验值
       - name: Package release
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1 -SkipBuild -NoInstaller
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1 -SkipBuild
 
       - name: Upload release package
         uses: actions/upload-artifact@v4

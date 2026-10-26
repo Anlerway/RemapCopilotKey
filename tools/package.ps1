@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    RemapCopilotKey 生产版打包：绿色包 + 可选的安装程序。
+    RemapCopilotKey 生产版打包：绿色包 + SHA256 校验值。
 
 .DESCRIPTION
     流程：
@@ -12,7 +12,6 @@
         4. 清除 Mark-of-the-Web（网络标记）
         5. 压成 zip
         6. 生成 SHA256 校验值
-        7. 如果装了 Inno Setup，再打一个安装程序（可选，失败不影响绿色包）
 
     为什么只有一个绿色包：
         配置程序是 .NET Framework 4.8 的 WPF 应用，而 net48 是 Windows 10 1903+
@@ -23,7 +22,6 @@
         release\RemapCopilotKey\                          解压即用的完整目录
         release\RemapCopilotKey-v<版本>-x64.zip           绿色包
         release\SHA256SUMS.txt                            校验值
-        installer\RemapCopilotKey-v<版本>-x64-setup.exe   安装程序（可选）
 
 .PARAMETER Version
     版本号，写进产物文件名。
@@ -34,23 +32,18 @@
 .PARAMETER NoZip
     只产出目录，不压缩、不生成校验值。
 
-.PARAMETER NoInstaller
-    跳过 Inno Setup 安装程序。
-
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1
-    powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1 -SkipBuild -NoInstaller
+    powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1 -SkipBuild
 #>
 [CmdletBinding()]
 param(
     [string] $Version       = '1.0.0',
     [string] $Configuration = 'Release',
     [string] $ArtifactsRoot = '',
-    [string] $Iscc          = '',
 
     [switch] $SkipBuild,
-    [switch] $NoZip,
-    [switch] $NoInstaller
+    [switch] $NoZip
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,7 +53,6 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $ArtifactsRoot) { $ArtifactsRoot = Join-Path $RepoRoot 'artifacts' }
 
 $ReleaseRoot   = Join-Path $ArtifactsRoot 'release'
-$InstallerRoot = Join-Path $ArtifactsRoot 'installer'
 $OutRoot       = Join-Path $RepoRoot 'build\out'
 $ServiceExe    = Join-Path $OutRoot 'Service\RemapCopilotKeyService.exe'
 $ConfigDir     = Join-Path $OutRoot 'Configurator'
@@ -118,7 +110,6 @@ function Remove-DirectoryWithRetry {
 }
 
 Remove-DirectoryWithRetry -Path $ReleaseRoot
-Remove-DirectoryWithRetry -Path $InstallerRoot
 New-Item -ItemType Directory -Force -Path $ReleaseRoot | Out-Null
 
 # ---------------------------------------------------------------------------
@@ -190,7 +181,6 @@ RemapCopilotKey v$Version
    启动类型「自动」）并立刻启动；以后开机自动运行，不会再弹 UAC。
 
    不想开机自启也可以只点「启动服务」手动运行（每次会弹一次 UAC）。
-   用安装包（package.cmd -Installer）装的话，第 3 步已经自动做过了。
    要卸载服务就点「结束并清除服务」（停止 + 从 SCM 删除）。
    想整体回到出厂设置点底部的「恢复默认配置」。
 
@@ -218,7 +208,7 @@ RemapCopilotKeyService.exe 有两种跑法：
 
 卸载与清理
 ----------
-用界面上的「结束并清除服务」，或用安装包卸载。手动清理：
+用界面上的「结束并清除服务」。手动清理：
 
    sc stop RemapCopilotKeyAgent
    sc delete RemapCopilotKeyAgent
@@ -299,51 +289,6 @@ if (-not $NoZip) {
     Write-Ok "-> $(Split-Path -Leaf $SumsPath)"
 }
 
-# ---------------------------------------------------------------------------
-# 6) 安装程序（可选）
-#
-# 没有 Inno Setup 就跳过，**不算失败** —— 绿色包本身已经够用。
-# ---------------------------------------------------------------------------
-$setupPath = $null
-if (-not $NoInstaller) {
-    Write-Step '安装程序（可选）'
-
-    if (-not $Iscc) {
-        $candidates = @(
-            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
-            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
-            'D:\APP\Inno Setup 6\ISCC.exe'
-        )
-        $Iscc = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-    }
-
-    $iss = Join-Path $PSScriptRoot 'installer.iss'
-
-    if (-not $Iscc -or -not (Test-Path -LiteralPath $Iscc)) {
-        Write-Warn '沒找到 Inno Setup（ISCC.exe），跳过安装程序。绿色包不受影响。'
-    }
-    elseif (-not (Test-Path -LiteralPath $iss)) {
-        Write-Warn "找不到 $iss，跳过安装程序。"
-    }
-    else {
-        New-Item -ItemType Directory -Force -Path $InstallerRoot | Out-Null
-        $setupName = "$PackageName-setup"
-        Write-Info "ISCC: $Iscc"
-
-        & $Iscc $iss "/DAppSource=$DistDir" "/DAppVersion=$Version" "/DOutputName=$setupName" "/DOutputDir=$InstallerRoot"
-        if ($LASTEXITCODE -ne 0) { throw "Inno Setup 打包失败（退出码 $LASTEXITCODE）" }
-
-        $candidate = Join-Path $InstallerRoot "$setupName.exe"
-        if (Test-Path -LiteralPath $candidate) {
-            Unblock-File -LiteralPath $candidate -ErrorAction SilentlyContinue
-            $setupPath = $candidate
-            Write-Ok ("{0}  {1} MB" -f (Split-Path -Leaf $candidate), [math]::Round((Get-Item $candidate).Length / 1MB, 2))
-        }
-        else {
-            Write-Warn 'ISCC 报告成功，但没有找到安装程序文件。'
-        }
-    }
-}
 
 # ---------------------------------------------------------------------------
 # 7) 汇总
@@ -355,7 +300,7 @@ Get-ChildItem -LiteralPath $DistDir -File | Sort-Object Name | ForEach-Object {
     Write-Host ("      {0,-44} {1,8:N1} KB" -f $_.Name, ($_.Length / 1KB)) -ForegroundColor DarkGray
 }
 
-foreach ($extra in @($ZipPath, $SumsPath, $setupPath)) {
+foreach ($extra in @($ZipPath, $SumsPath)) {
     if ($extra -and (Test-Path -LiteralPath $extra)) {
         $rel = $extra.Substring($ArtifactsRoot.Length + 1)
         Write-Host ("  {0,-48} {1,9:N2} MB" -f $rel, ((Get-Item $extra).Length / 1MB))

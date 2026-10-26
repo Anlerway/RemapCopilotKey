@@ -59,8 +59,6 @@ The status bar turns green once the hook has been delivered into your session:
 3. Run `RemapCopilotKey.exe` (one UAC prompt), pick your mapping — it saves automatically
 4. Click "**Register service**": it registers a LocalSystem auto-start service and starts it. From then on every boot delivers the hook into your session with **no UAC prompting**
 
-If you installed from the setup package (`package.cmd -Installer`), step 4 is already done, and the uninstaller runs `--unregister-service`.
-
 ### Update
 
 Just replace the executables; your `config.json` is untouched. Stop the service first, replace, then start it again.
@@ -84,7 +82,7 @@ Requirements: Visual Studio (MSVC + .NET Framework 4.8 Targeting Pack) and the W
 ```bat
 build.cmd               :: build + run every test
 build.cmd test          :: tests only
-package.cmd             :: portable release + SHA256SUMS.txt (-Installer needs Inno Setup)
+package.cmd             :: portable release + SHA256SUMS.txt
 ```
 
 ## Features
@@ -155,7 +153,7 @@ Service:
 | `--loglevel <level>` | Override the log level |
 | `--quiet` / `--help` | No dialogs / usage |
 
-Configurator: `--register-service`, `--unregister-service` (used by the installer), `--dump-default-config <path>`, `--diagnose`.
+Configurator: `--register-service`, `--unregister-service` (for deployment scripts), `--dump-default-config <path>`, `--diagnose`.
 
 ## How auto-start works
 

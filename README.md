@@ -59,8 +59,6 @@
 3. 双击 `RemapCopilotKey.exe`（会弹一次 UAC），选好映射目标 —— 改完就自动保存了
 4. 点「**注册服务**」：注册成 LocalSystem 自动启动服务并立即启动，此后每次开机都会把钩子进程投递进你的会话，**不再弹 UAC**
 
-用安装包（`package.cmd -Installer`）装的用户第 4 步已经自动做了，卸载时会自动 `--unregister-service`。
-
 ### 更新
 
 覆盖 exe 即可，配置在 `config.json` 里不会被动。服务正在跑就先「停止服务」，覆盖后再「启动服务」。
@@ -84,7 +82,7 @@ schtasks /Delete /TN RemapCopilotKey /F
 ```bat
 build.cmd               :: 编译 + 跑全部测试
 build.cmd test          :: 只跑测试
-package.cmd             :: 生产版绿色包 + SHA256SUMS.txt（加 -Installer 出安装程序，需 Inno Setup）
+package.cmd             :: 生产版绿色包 + SHA256SUMS.txt
 ```
 
 ## 功能
@@ -155,7 +153,7 @@ package.cmd             :: 生产版绿色包 + SHA256SUMS.txt（加 -Installer 
 | `--loglevel <级别>` | 临时覆盖日志级别 |
 | `--quiet` / `--help` | 不弹任何对话框 / 显示用法 |
 
-配置程序：`--register-service`、`--unregister-service`（安装包用）、`--dump-default-config <路径>`、`--diagnose`。
+配置程序：`--register-service`、`--unregister-service`（部署脚本用）、`--dump-default-config <路径>`、`--diagnose`。
 
 ## 开机自启是怎么做的
 

@@ -24,9 +24,9 @@ public partial class App : Application
             return;
         }
 
-        // 给安装包用的开关：静默注册 / 清除开机自启服务后退出，不开窗口。
+        // 给部署脚本用的开关：静默注册 / 清除开机自启服务后退出，不开窗口。
         //
-        // 安装包（Inno Setup）本来就是管理员权限，安装完直接调这个开关，
+        // 调用方本来就是管理员权限（否则 SCM 会拒绝），装完直接调这个开关，
         // 用户装完就是"已注册自启 + 服务已在跑"的状态，不需要再点一次注册。
         if (Array.Exists(e.Args, a => string.Equals(a, "--register-service", StringComparison.Ordinal)))
         {
