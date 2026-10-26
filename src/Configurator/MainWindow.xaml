@@ -45,6 +45,48 @@
                     </StackPanel>
                 </Grid>
 
+                <!-- ============ 服务管理（放最上面：注册 / 结束并清除是一键操作） ============ -->
+                <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="ServiceCardTitle" Style="{StaticResource SectionTitleText}" Text="服务管理" />
+
+                        <WrapPanel Margin="0,14,0,0">
+                            <Button x:Name="ButtonRegisterService"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="注册服务"
+                                    Click="OnRegisterServiceClick" />
+                            <Button x:Name="ButtonRemoveService"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="结束并清除服务"
+                                    Click="OnRemoveServiceClick" />
+                            <Button x:Name="ButtonStartService"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="启动服务"
+                                    Click="OnStartServiceClick" />
+                            <Button x:Name="ButtonStopService"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,8,8"
+                                    Content="停止服务"
+                                    Click="OnStopServiceClick" />
+                        </WrapPanel>
+
+                        <TextBlock x:Name="ServiceStatusText"
+                                   Style="{StaticResource BodyText}"
+                                   Margin="0,6,0,0"
+                                   FontWeight="SemiBold"
+                                   Text="服务未运行" />
+
+                        <TextBlock x:Name="ConfigPathText"
+                                   Style="{StaticResource CaptionText}"
+                                   Margin="0,4,0,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   Text="配置文件：" />
+                    </StackPanel>
+                </Border>
+
                 <!-- ============ 映射动作 ============ -->
                 <Border Style="{StaticResource Card}" Margin="0,12,0,0">
                     <StackPanel>
@@ -221,48 +263,6 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ============ 服务管理 ============ -->
-                <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-                    <StackPanel>
-                        <TextBlock x:Name="ServiceCardTitle" Style="{StaticResource SectionTitleText}" Text="服务管理" />
-
-                        <WrapPanel Margin="0,14,0,0">
-                            <Button x:Name="ButtonStartService"
-                                    Style="{StaticResource PrimaryButton}"
-                                    Margin="0,0,8,8"
-                                    Content="启动服务"
-                                    Click="OnStartServiceClick" />
-                            <Button x:Name="ButtonStopService"
-                                    Style="{StaticResource SecondaryButton}"
-                                    Margin="0,0,8,8"
-                                    Content="停止服务"
-                                    Click="OnStopServiceClick" />
-                            <Button x:Name="ButtonRegisterService"
-                                    Style="{StaticResource SecondaryButton}"
-                                    Margin="0,0,8,8"
-                                    Content="注册服务"
-                                    Click="OnRegisterServiceClick" />
-                            <Button x:Name="ButtonRemoveService"
-                                    Style="{StaticResource SecondaryButton}"
-                                    Margin="0,0,8,8"
-                                    Content="结束并清除服务"
-                                    Click="OnRemoveServiceClick" />
-                        </WrapPanel>
-
-                        <TextBlock x:Name="ServiceStatusText"
-                                   Style="{StaticResource BodyText}"
-                                   Margin="0,6,0,0"
-                                   FontWeight="SemiBold"
-                                   Text="服务未运行" />
-
-                        <TextBlock x:Name="ConfigPathText"
-                                   Style="{StaticResource CaptionText}"
-                                   Margin="0,4,0,0"
-                                   TextTrimming="CharacterEllipsis"
-                                   Text="配置文件：" />
-                    </StackPanel>
-                </Border>
-
             </StackPanel>
         </ScrollViewer>
 
@@ -291,14 +291,21 @@
                                Style="{StaticResource BodyText}"
                                FontSize="13"
                                TextTrimming="CharacterEllipsis" />
+                    <!-- 自动保存状态：每次改动 600ms 后静默落盘，这里显示结果 -->
+                    <TextBlock x:Name="SaveHintText"
+                               Style="{StaticResource CaptionText}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               Text="改动会自动保存" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button x:Name="ButtonSave"
-                            Style="{StaticResource PrimaryButton}"
-                            MinWidth="100"
-                            Content="保存"
-                            Click="OnSaveClick" />
+                    <Button x:Name="ButtonRestoreDefaults"
+                            Style="{StaticResource SecondaryButton}"
+                            MinWidth="110"
+                            Content="恢复默认配置"
+                            Click="OnRestoreDefaultsClick" />
                     <Button x:Name="ButtonReload"
                             Style="{StaticResource SecondaryButton}"
                             MinWidth="100"

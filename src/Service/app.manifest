@@ -10,15 +10,22 @@
   <description>RemapCopilotKey Service</description>
 
   <!--
-    服务程序固定以管理员权限运行。
+    固定声明"需要管理员"，对两种跑法各有用处：
 
-    原因：低级键盘钩子（WH_KEYBOARD_LL）受 UIPI 限制，非提升进程看不到送往提升窗口
-    的输入。要覆盖所有窗口，服务必须始终是管理员。
+    1. 钩子进程（默认跑法，跑在用户会话里，真正装 WH_KEYBOARD_LL 的那个）：
+       低级键盘钩子受 UIPI 限制，非提升进程看不到送往提升窗口的输入，所以
+       它必须是高完整性。配置程序手动"启动服务"时由此触发 UAC；
+       开机自启时由服务宿主用用户完整令牌 CreateProcessAsUser 拉起，
+       令牌本身已提权，不会再弹 UAC。
 
-    开机自启不走这个清单（否则每次登录都会弹 UAC），而是由注册的计划任务以
-    RunLevel=HighestAvailable 启动，登录时静默提权、不弹 UAC。
-    该计划任务由**配置程序** RemapCopilotKey.exe 注册与删除，
-    实现见 src/Configurator/AutoStart.cs（服务程序侧已不再处理）。
+    2. 服务宿主（service 模式，由 SCM 以 LocalSystem 启动）：
+       UAC 清单**不参与**服务的启动 —— SCM 用自己的服务令牌直接
+       CreateProcess，不经过 AppInfo 提权，所以这里声明什么都没关系，
+       服务照样以 SYSTEM 起来。（反过来说，这个清单不能用来"给服务提权"，
+       服务的权限完全由服务账户决定。）
+
+    开机自启的实现见 src/Configurator/ServiceInstaller.cs（注册 SCM 服务）
+    与 src/Service/src/ServiceHost.cpp（服务宿主把钩子投递进用户会话）。
 
     注意：这里的"管理员权限"是**服务自身**的。配套界面里那个"以管理员权限运行"
     开关控制的是**被打开的目标程序**是否需要提权（ShellExecute 的 runas 动词）。

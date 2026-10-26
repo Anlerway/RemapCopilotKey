@@ -68,25 +68,12 @@
     <Using Include="System.IO" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!--
-      计划任务的 COM 接口（taskschd，GUID 见 taskschd.idl）。
-      用 tlbimp 从系统类型库生成互操作程序集 —— 不手写 vtable 声明。
-
-      为什么非用它不可：任务的登录方式（TASK_LOGON_INTERACTIVE_TOKEN）必须通过
-      RegisterTaskDefinition 的**参数**传进去，任务定义 XML 里表达不出来
-      （XML 的 schema 禁止 <GroupId> 和 <LogonType> 同时出现）。详见 AutoStart.cs 顶部。
-    -->
-    <COMReference Include="TaskScheduler">
-      <Guid>{E34CB9F1-C7F7-424C-BE29-027DCC09363A}</Guid>
-      <VersionMajor>1</VersionMajor>
-      <VersionMinor>0</VersionMinor>
-      <Lcid>0</Lcid>
-      <WrapperTool>tlbimp</WrapperTool>
-      <Isolated>False</Isolated>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </COMReference>
-  </ItemGroup>
+  <!--
+    这里**曾经**有一个 TaskScheduler 的 COMReference（taskschd 类型库），用来注册
+    "登录时触发"的计划任务。现已删除：计划任务那条路在这台目标机器上给的是低完整性
+    令牌（详见 docs\设计说明.md），开机自启改成注册一个 LocalSystem 的 Windows 服务，
+    只用到 SCM 的 P/Invoke（ServiceInstaller.cs），不需要任何 COM 互操作程序集。
+  -->
 
   <ItemGroup>
     <!-- 语言包：新增语言只需往 Lang\ 里丢一个 JSON，无需改代码 -->

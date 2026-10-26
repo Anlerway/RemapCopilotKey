@@ -149,7 +149,7 @@ foreach ($required in @($ServiceExe, $ConfigExe)) {
 Write-Step "组装 -> $DistDir"
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
-# 配置程序：exe + app.config + 依赖的库（TaskScheduler 及其中英附属资源）。
+# 配置程序：exe + app.config + 依赖的库（目前是 .NET Framework 自带的那些，没有额外 dll）。
 #
 # 这里用"从产物目录整体拷贝、再排除不需要的"方式，而不是逐个文件点名 ——
 # 点名的话，以后配置程序多一个依赖就会漏拷，而且是运行到那一步才发现。
@@ -184,25 +184,45 @@ RemapCopilotKey v$Version
 第一次使用
 ----------
 1. 运行 RemapCopilotKey.exe（配置程序，需要管理员权限，会弹一次 UAC）。
-2. 选择 Copilot 键要映射成的目标，点「保存」。
-3. 点「启动服务」（会再弹一次 UAC）。
+2. 选择 Copilot 键要映射成的目标 —— 改完会自动保存，没有「保存」按钮，
+   底部那行会显示「已自动保存 HH:mm:ss」。
+3. 点「注册服务」—— 注册为 Windows 服务（RemapCopilotKeyAgent，LocalSystem、
+   启动类型「自动」）并立刻启动；以后开机自动运行，不会再弹 UAC。
 
-   ⚠️ 不要点「注册服务」—— 开机自启目前不可用，原因见下。
-   如果你之前注册过，先点「结束并清除服务」把那个任务删掉。
+   不想开机自启也可以只点「启动服务」手动运行（每次会弹一次 UAC）。
+   用安装包（package.cmd -Installer）装的话，第 3 步已经自动做过了。
+   要卸载服务就点「结束并清除服务」（停止 + 从 SCM 删除）。
+   想整体回到出厂设置点底部的「恢复默认配置」。
 
-已知问题：开机自启不可用
-------------------------
-由计划任务启动的服务实例是**低完整性(0x1000)**：低级键盘钩子受 UIPI 限制，
-**收不到任何按键** —— 钩子装得上、日志照写、不报任何错，但按键没反应。
+开机自启是怎么工作的
+--------------------
+RemapCopilotKeyService.exe 有两种跑法：
 
-所以每次开机后需要**手动**点一次「启动服务」。直接启动的实例是高完整性
-(0x3000)，功能正常，代价是每次要确认一次 UAC。
+  * 钩子模式（默认 / --run）：在你的交互会话里跑，高完整性(0x3000)，
+    装低级键盘钩子；开机自启时由服务宿主投递进来。
+  * 服务模式（--service）：由 SCM 拉起的 Windows 服务宿主，LocalSystem、
+    常驻 Session 0，只负责把钩子进程投递进你的交互会话
+    （WTSQueryUserToken → CreateProcessAsUser），自己不装钩子
+    （Session 0 收不到交互桌面的输入）。
 
-判断方法：看程序目录下的 RemapCopilotKey.boot.log，里面有这样一行
+所以开机自启的链条是：开机 → SCM 拉起服务宿主 → 你登录 → 钩子进程被投递进
+你的会话。全程不经过 UAC。
 
-   运行环境: 账户=... 会话=1 ... 完整性=高(0x3000) 提权=是
+判断有没有生效：看程序目录下的 RemapCopilotKey.boot.log（不受 logLevel 影响）。
+里面会有两行「运行环境」——
 
-必须是"高(0x3000)"才算正常。这个文件不受 logLevel 影响，永远会写。
+   运行环境: 账户=NT AUTHORITY\SYSTEM 会话=0 ... 模式=service   <- 服务宿主，正常
+   运行环境: 账户=... 会话=1 ... 完整性=高(0x3000) 提权=是        <- 钩子进程，看这行
+
+钩子进程那行必须是 会话 不为 0 且 完整性=高(0x3000)。
+
+卸载与清理
+----------
+用界面上的「结束并清除服务」，或用安装包卸载。手动清理：
+
+   sc stop RemapCopilotKeyAgent
+   sc delete RemapCopilotKeyAgent
+   schtasks /Delete /TN RemapCopilotKey /F     旧版本遗留的计划任务
 
 本程序不需要安装任何运行时：.NET Framework 4.8 是 Windows 10 1903+ /
 Windows 11 系统自带的组件。

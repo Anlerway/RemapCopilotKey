@@ -11,9 +11,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{E5F6A7B8-C9DA-4EBF-8012-3456789ABCDE}"
 	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
-		docs\配置格式.md = docs\配置格式.md
 		docs\设计说明.md = docs\设计说明.md
-		docs\开发笔记.md = docs\开发笔记.md
 	EndProjectSection
 EndProject
 Global

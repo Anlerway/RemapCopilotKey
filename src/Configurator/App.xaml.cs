@@ -24,15 +24,21 @@ public partial class App : Application
             return;
         }
 
-        // 诊断用开关：导出**系统里已注册**的那个任务的真实定义后退出。
+        // 给安装包用的开关：静默注册 / 清除开机自启服务后退出，不开窗口。
         //
-        // 注册走的是 schtasks 的命令行开关（见 AutoStart.cs），任务定义由
-        // 计划任务程序自己生成。所以"我们请求的"没什么好看的，要排查
-        // "任务主体 / 运行级别不对"只能看系统实际存下来的那一份 ——
-        // 主体被系统改写这种事真的发生过。
-        if (e.Args.Length >= 2 && string.Equals(e.Args[0], "--export-task", StringComparison.Ordinal))
+        // 安装包（Inno Setup）本来就是管理员权限，安装完直接调这个开关，
+        // 用户装完就是"已注册自启 + 服务已在跑"的状态，不需要再点一次注册。
+        if (Array.Exists(e.Args, a => string.Equals(a, "--register-service", StringComparison.Ordinal)))
         {
-            Shutdown(ExportRegisteredTask(e.Args[1]));
+            ApplyConfiguredLanguage();
+            Shutdown(ServiceInstaller.Install(ServiceControl.ServiceExePath, out _) ? 0 : 1);
+            return;
+        }
+
+        if (Array.Exists(e.Args, a => string.Equals(a, "--unregister-service", StringComparison.Ordinal)))
+        {
+            ApplyConfiguredLanguage();
+            Shutdown(ServiceInstaller.Uninstall(out _) ? 0 : 1);
             return;
         }
 
@@ -78,6 +84,22 @@ public partial class App : Application
         Diagnostics.Log("主窗口已显示");
     }
 
+    /// <summary>
+    /// 按 config.json 里的 language 选一次界面语言。
+    ///
+    /// 静默分支不经过主窗口，但服务的显示名与描述取自语言包（ServiceInstaller 的
+    /// service.displayName / service.description），不选一次就会写进 services.msc
+    /// 里与用户界面语言不一致的文案。
+    /// </summary>
+    private static void ApplyConfiguredLanguage()
+    {
+        var language = AppConfig.Load(ServiceControl.ConfigPath).Language;
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            Localization.SetLanguage(language);
+        }
+    }
+
     /// <summary>写出默认配置；返回进程退出码。</summary>
     private static int DumpDefaultConfig(string path)
     {
@@ -90,29 +112,6 @@ public partial class App : Application
         {
             return WriteError(path, ex);
         }
-    }
-
-    /// <summary>
-    /// 导出**已注册任务**的原始任务定义（schtasks 的原生字节）；返回进程退出码。
-    /// 用于确认系统最终保存的主体 / 运行级别与我们的意图是否一致。
-    /// </summary>
-    private static int ExportRegisteredTask(string path)
-    {
-        if (AutoStart.ExportRegisteredTask(path, out var error))
-        {
-            return 0;
-        }
-
-        try
-        {
-            File.WriteAllText(path + ".error.txt", error, new System.Text.UTF8Encoding(true));
-        }
-        catch
-        {
-            // 连错误文件都写不出去就只能靠退出码了
-        }
-
-        return 1;
     }
 
     private static int WriteError(string path, Exception ex)

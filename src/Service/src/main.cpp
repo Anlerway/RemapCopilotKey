@@ -7,17 +7,26 @@
 //   * 出错只写日志；只有"钩子装不上"这类致命错误才弹一次对话框
 //
 // 为什么要管理员权限：低级键盘钩子（WH_KEYBOARD_LL）受 UIPI 限制，
-//   非提升进程看不到送往提升窗口的输入。开机自启由计划任务以
-//   RunLevel=HighestAvailable + LogonType=InteractiveToken 启动当前用户，
-//   静默提权、不弹 UAC。
+//   非提升进程看不到送往提升窗口的输入。
 //
-// 这不是 Windows 服务（Session 0 的服务收不到交互桌面的按键），
-//       而是一个运行在用户交互式会话里的后台进程，详见 AutoStart.h。
+// —— 同一个 exe，两种跑法 ——
 //
-// 注意：**它必须跑在用户会话里**。试过"启动时 SYSTEM 任务 + Session 0 宿主
-// 再用 CreateProcessAsUser 投递"的路子，但计划任务程序会给任务进程发
-// **低完整性受限令牌**（连 SYSTEM 主体也一样），`WTSQueryUserToken` 直接
-// 返回 ERROR_ACCESS_DENIED —— 那条路已经放弃，不要再往回走。详见 AutoStart.h。
+//  (a) --service    Windows 服务（SCM 以 LocalSystem 启动，开机自启就靠它）
+//      跑在 Session 0，装不了钩子。职责只有一个：监督交互式会话，把
+//      **自己**以 --run 投递进用户会话（WTSQueryUserToken +
+//      CreateProcessAsUser），并保证服务停止时子进程一起收掉。
+//      见 ServiceHost.h / ServiceHost.cpp。
+//
+//  (b) 默认 / --run  用户会话里的钩子进程，真正装 WH_KEYBOARD_LL 的那个。
+//      被 (a) 投递时继承的是**用户完整令牌**（高完整性），所以拦得住
+//      送往提升窗口的按键；由配置程序手动"启动服务"时同样如此。
+//
+// 历史教训（不要再往回走）：计划任务 RunLevel=HighestAvailable +
+//   LogonType=InteractiveToken 本该给出高完整性，实测给的是**低完整性
+//   受限令牌**（提权=是 完整性=低），钩子装得上但一个按键都收不到；
+//   "启动时任务 + Session 0 宿主"也试过，`WTSQueryUserToken` 直接
+//   ERROR_ACCESS_DENIED。所以自启宿主换成了真正的 SCM 服务 —— 服务令牌
+//   是完整 SYSTEM 令牌，不受计划任务那套令牌硬化影响。
 // ---------------------------------------------------------------------------
 
 #include <windows.h>
@@ -33,6 +42,7 @@
 #include "CopilotHook.h"
 #include "Keys.h"
 #include "Log.h"
+#include "ServiceHost.h"
 
 using namespace rck;
 
@@ -58,7 +68,7 @@ constexpr UINT WM_RCK_QUIT   = WM_APP + 5;
 //
 // 服务程序静默运行，正常情况下不会出现任何界面；这个字符串只用于
 // "钩子安装失败" 这一种情况。开机自启相关的提示已经全部搬到配置程序里
-// （见 src/Configurator/AutoStart.cs）。
+// （注册见 src/Configurator/ServiceInstaller.cs，投递见 src/Service/src/ServiceHost.cpp）。
 // ---------------------------------------------------------------------------
 
 enum StringId : int {
@@ -251,16 +261,17 @@ void AllowControlMessages(HWND hwnd) {
 // ---------------------------------------------------------------------------
 // 命令行
 //
-// 只保留"运行服务"和"停止服务"两条。
-// 开机自启（计划任务）的注册与删除**不在这里**，而在配置程序里 ——
-// 见 src/Configurator/AutoStart.cs，以及该文件头部对原因的说明。
+// 只保留"运行钩子"和"停止钩子"两条，外加 --service（SCM 服务宿主）。
+// 服务的注册、启动、删除**不在这里**，而在配置程序里 ——
+// 见 src/Configurator/ServiceInstaller.cs，以及该文件头部对原因的说明。
 // ---------------------------------------------------------------------------
 
 struct CommandLineOptions {
-    bool run   = true;
-    bool stop  = false;
-    bool quiet = false;
-    bool help  = false;
+    bool run     = true;
+    bool stop    = false;
+    bool quiet   = false;
+    bool help    = false;
+    bool service = false;   // --service：以 SCM 服务宿主身份运行（见 ServiceHost.h）
 
     std::wstring configPath;
     std::string  logLevel;
@@ -285,6 +296,7 @@ CommandLineOptions ParseCommandLine() {
         if (EqualsIgnoreCase(arg, L"--stop"))            { options.stop = true; options.run = false; }
         else if (EqualsIgnoreCase(arg, L"--quiet"))      { options.quiet = true; }
         else if (EqualsIgnoreCase(arg, L"--run"))        { /* 默认行为 */ }
+        else if (EqualsIgnoreCase(arg, L"--service"))    { options.service = true; options.run = false; }
         else if (EqualsIgnoreCase(arg, L"--config"))     { nextValue(options.configPath); }
         else if (EqualsIgnoreCase(arg, L"--loglevel")) {
             std::wstring value;
@@ -325,10 +337,11 @@ int HandleStop() {
 int HandleHelp() {
     const wchar_t* text =
         L"RemapCopilotKeyService\n\n"
-        L"  --run  --stop\n"
+        L"  --run      以钩子进程运行（默认）\n"
+        L"  --service  以 Windows 服务宿主运行（只能由 SCM 启动）\n"
+        L"  --stop     请运行中的钩子进程退出\n"
         L"  --config <路径>  --loglevel <级别>  --quiet  --help\n\n"
-        L"开机自启（计划任务）的注册与删除在配置程序 RemapCopilotKey.exe 里，"
-        L"不在这里。\n";
+        L"服务的注册与删除在配置程序 RemapCopilotKey.exe 里，不在这里。\n";
     MessageBoxW(nullptr, text, T(S_TITLE), MB_OK | MB_ICONINFORMATION);
     return 0;
 }
@@ -372,10 +385,18 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
     BootTraceSetFile(g_app.moduleDir + L"\\RemapCopilotKey.boot.log");
     RCK_BOOT(L"进程启动 pid=%lu 模式=%s",
              GetCurrentProcessId(),
-             options.stop ? L"stop" : (options.help ? L"help" : L"run"));
+             options.service ? L"service"
+                             : (options.stop ? L"stop" : (options.help ? L"help" : L"run")));
 
     if (options.help)      return HandleHelp();
     if (options.stop)      return HandleStop();
+
+    // --- Windows 服务宿主：只负责把钩子投递进用户会话，自己不装钩子 ---
+    if (options.service) {
+        const int result = RunAsServiceHost(g_app.quiet);
+        if (SUCCEEDED(comResult)) CoUninitialize();
+        return result;
+    }
 
     // --- 正常运行模式（后台静默） ---
 
@@ -408,11 +429,12 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
 
     // 放在 ApplyConfig 之后：这样这一行会跟着用户的 logLevel 走。
     // 排查"钩子装上了但收不到按键"时，第一步就是把 logLevel 调成 info 或 debug，
-    // 然后对比这一行在"手动启动"与"计划任务启动"下有什么不同。
+    // 然后对比这一行在"手动启动"与"开机自动启动"下有什么不同 —— 两者的
+    // 会话/窗口站/桌面/完整性都应该是同一套值。
     RCK_LOG_INFO(L"运行环境: %s", DescribeExecutionEnvironment().c_str());
 
     // 同一行同时写进不受 logLevel 影响的启动追踪。
-    // 这一行是"自启到底成没成"的唯一判据（Session 0 宿主那一侧记的是宿主自己），
+    // 这一行是"自启到底成没成"的唯一判据（服务宿主那一侧记的是宿主自己的环境），
     // 而默认配置的 logLevel 是 error —— 只写普通日志等于没写。
     RCK_BOOT(L"运行环境: %s", DescribeExecutionEnvironment().c_str());
 

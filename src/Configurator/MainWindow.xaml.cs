@@ -40,6 +40,9 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _statusTimer = new();
 
+    /// <summary>自动保存的防抖计时器：停手 600ms 才落盘，避免边打字边写文件。</summary>
+    private readonly DispatcherTimer _autoSaveTimer = new();
+
     private AppConfig _config = new();
 
     /// <summary>最近一次"已保存/已加载"状态的 JSON，用于判断有没有未保存的改动。</summary>
@@ -74,6 +77,11 @@ public partial class MainWindow : Window
         }
         HotkeySendKey.KeyCaptured += OnHotkeyCaptured;
 
+        // 自动保存：任何控件变化都只排队，停手 600ms 后统一写盘。
+        _autoSaveTimer.Interval = TimeSpan.FromMilliseconds(600);
+        _autoSaveTimer.Tick += OnAutoSaveTick;
+        HookAutoSaveEvents();
+
         SystemActionCombo.ItemsSource = _systemActions;
         SystemActionCombo.DisplayMemberPath = nameof(SystemActionEntry.Display);
         SystemActionCombo.SelectedValuePath = nameof(SystemActionEntry.Id);
@@ -103,6 +111,7 @@ public partial class MainWindow : Window
     {
         Localization.LanguageChanged -= OnLanguageChanged;
         _statusTimer.Stop();
+        _autoSaveTimer.Stop();
         base.OnClosed(e);
     }
 
@@ -179,10 +188,13 @@ public partial class MainWindow : Window
             ButtonRegisterService.Content = Localization.T("button.registerService");
             ButtonRemoveService.Content = Localization.T("button.removeService");
 
-            ButtonSave.Content = Localization.T("button.save");
+            ButtonRestoreDefaults.Content = Localization.T("button.restoreDefaults");
             ButtonReload.Content = Localization.T("button.reload");
             ButtonClose.Content = Localization.T("button.close");
             ButtonProjectUrl.Content = Localization.T("button.projectUrl");
+
+            // 自动保存提示（切换语言时回到默认文案，下一次改动会再刷新）
+            ShowSaveHint(Localization.T("status.autoSave"), isWarning: false);
 
             // 配置文件路径放在服务卡片里（底部栏太窄，长路径会被挤到换行）
             ConfigPathText.Text = Localization.T("status.configPath") + " " + ServiceControl.ConfigPath;
@@ -294,6 +306,7 @@ public partial class MainWindow : Window
 
         _config.Language = item.Code;
         Localization.SetLanguage(item.Code);
+        QueueAutoSave();
     }
 
     // -----------------------------------------------------------------------
@@ -322,11 +335,16 @@ public partial class MainWindow : Window
 
     private void LoadConfigIntoUi()
     {
+        LoadConfigFromDisk(showError: true);
+        ApplyConfigToUi();
+    }
+
+    /// <summary>把 _config 的内容铺到界面控件上（不读磁盘）。</summary>
+    private void ApplyConfigToUi()
+    {
         _loading = true;
         try
         {
-            LoadConfigFromDisk(showError: true);
-
             if (!string.IsNullOrWhiteSpace(_config.Language))
             {
                 Localization.SetLanguage(_config.Language);
@@ -439,21 +457,25 @@ public partial class MainWindow : Window
         };
     }
 
-    /// <summary>当前界面内容与最近一次保存/加载的内容是否不同。</summary>
-    private bool HasUnsavedChanges()
-    {
-        if (_savedJson.Length == 0) return false;
-        return CollectConfigFromUi().ToJson() != _savedJson;
-    }
-
     // -----------------------------------------------------------------------
     // 交互
     // -----------------------------------------------------------------------
 
-    private void OnActionTypeChanged(object sender, RoutedEventArgs e) => UpdateHintAndEnabledStates();
+    private void OnActionTypeChanged(object sender, RoutedEventArgs e)
+    {
+        UpdateHintAndEnabledStates();
+        QueueAutoSave();
+    }
 
     /// <summary>捕获到按键后刷新提示（与 WinForms 版的 KeyCaptured 回调等价）。</summary>
-    private void OnHotkeyCaptured(object? sender, EventArgs e) => UpdateHintAndEnabledStates();
+    private void OnHotkeyCaptured(object? sender, EventArgs e)
+    {
+        UpdateHintAndEnabledStates();
+        QueueAutoSave();
+    }
+
+    /// <summary>界面任何一处改动都走这里：排队自动保存。签名兼容 Routed/TextChanged 事件。</summary>
+    private void OnConfigChanged(object sender, EventArgs e) => QueueAutoSave();
 
     private void OnOpenUrlChecked(object sender, RoutedEventArgs e)
     {
@@ -479,13 +501,18 @@ public partial class MainWindow : Window
         ButtonCancelChord.IsEnabled = chord;
     }
 
-    private void OnClearSendKeyClick(object sender, RoutedEventArgs e) => HotkeySendKey.ClearKey();
+    private void OnClearSendKeyClick(object sender, RoutedEventArgs e)
+    {
+        HotkeySendKey.ClearKey();
+        QueueAutoSave();
+    }
 
     private void OnCancelSendKeyClick(object sender, RoutedEventArgs e) => HotkeySendKey.CancelCapture();
 
     private void OnClearChordClick(object sender, RoutedEventArgs e)
     {
         foreach (var box in _chordBoxes) box.ClearKey();
+        QueueAutoSave();
     }
 
     private void OnCancelChordClick(object sender, RoutedEventArgs e)
@@ -540,31 +567,89 @@ public partial class MainWindow : Window
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 
-    private void OnSaveClick(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 恢复默认配置：把内存里的配置换成 <see cref="AppConfig"/> 的默认值，
+    /// 铺回界面后立刻写盘（不再需要"保存"按钮）。
+    /// </summary>
+    private void OnRestoreDefaultsClick(object sender, RoutedEventArgs e)
     {
-        if (!SaveConfig()) return;
+        var answer = MessageBox.Show(this, Localization.T("msg.confirmRestore.body"),
+            Localization.T("msg.confirmRestore.title"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
 
-        MessageBox.Show(
-            this,
-            Localization.T("msg.saved.body", ServiceControl.ConfigPath),
-            Localization.T("msg.saved.title"),
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        _config = new AppConfig();
+        ApplyConfigToUi();          // 界面换成默认值，并记录新的基线
+        AutoSave();                 // 立刻落盘，不等防抖
+
+        MessageBox.Show(this, Localization.T("msg.restored.body"),
+            Localization.T("msg.restored.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+        RefreshStatus();
     }
 
-    /// <summary>校验并保存配置；成功后刷新基线。返回是否保存成功。</summary>
-    private bool SaveConfig()
+    // --- 自动保存 ---------------------------------------------------------
+
+    /// <summary>把所有会改动配置的控件挂上"改动即排队保存"。</summary>
+    private void HookAutoSaveEvents()
     {
+        CheckEnabled.Checked += OnConfigChanged;
+        CheckEnabled.Unchecked += OnConfigChanged;
+        CheckReloadOnChange.Checked += OnConfigChanged;
+        CheckReloadOnChange.Unchecked += OnConfigChanged;
+        CheckRunAsAdmin.Checked += OnConfigChanged;
+        CheckRunAsAdmin.Unchecked += OnConfigChanged;
+        CheckToggleWindow.Checked += OnConfigChanged;
+        CheckToggleWindow.Unchecked += OnConfigChanged;
+
+        AppPathBox.TextChanged += OnConfigChanged;
+        AppArgsBox.TextChanged += OnConfigChanged;
+        UrlBox.TextChanged += OnConfigChanged;
+
+        LogLevelCombo.SelectionChanged += OnConfigChanged;
+        SystemActionCombo.SelectionChanged += OnConfigChanged;
+    }
+
+    /// <summary>排队一次自动保存（防抖 600ms，连续输入只写一次文件）。</summary>
+    private void QueueAutoSave()
+    {
+        if (_loading) return;
+
+        ShowSaveHint(Localization.T("status.autoSaveDirty"), isWarning: false);
+        _autoSaveTimer.Stop();
+        _autoSaveTimer.Start();
+    }
+
+    private void OnAutoSaveTick(object? sender, EventArgs e)
+    {
+        _autoSaveTimer.Stop();
+        AutoSave();
+    }
+
+    /// <summary>
+    /// 把界面上的配置静默写盘。
+    ///
+    /// 校验不通过 / 写文件失败都只改底部那行提示，不弹窗 —— 自动保存不能打断输入，
+    /// 也不能因为用户正在敲网址就一天弹八次对话框。
+    /// </summary>
+    private void AutoSave()
+    {
+        if (_loading) return;
+
+        // 正在捕获按键时界面里还是"按下按键"的中间态，先不落盘
+        if (HotkeySendKey.IsCapturing) return;
+        foreach (var box in _chordBoxes)
+        {
+            if (box.IsCapturing) return;
+        }
+
         var config = CollectConfigFromUi();
+        var json = config.ToJson();
+        if (json == _savedJson) return;             // 没有实质改动
 
         var problems = config.Validate();
         if (problems.Count > 0)
         {
-            MessageBox.Show(
-                this,
-                Localization.T("msg.invalid.body", string.Join("\n", problems)),
-                Localization.T("msg.invalid.title"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
+            ShowSaveHint(Localization.T("status.autoSaveBlocked", string.Join("；", problems)), isWarning: true);
+            return;
         }
 
         try
@@ -574,51 +659,32 @@ public partial class MainWindow : Window
 
             config.Save(ServiceControl.ConfigPath);
             _config = config;
-            _savedJson = config.ToJson();
+            _savedJson = json;
 
             // 服务有文件监视会自动重载；这里再发一条消息让它立刻生效。
             ServiceControl.SignalReload();
-            return true;
+            ShowSaveHint(Localization.T("status.autoSaved", DateTime.Now.ToString("HH:mm:ss")), isWarning: false);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                Localization.T("msg.saveFailed.body", ServiceControl.ConfigPath, ex.Message),
-                Localization.T("msg.saveFailed.title"),
-                MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
+            ShowSaveHint(Localization.T("status.saveFailed", ex.Message), isWarning: true);
         }
+    }
+
+    /// <summary>底部那行保存状态：灰字=已保存 / 待保存，红字=需要人工处理。</summary>
+    private void ShowSaveHint(string text, bool isWarning)
+    {
+        SaveHintText.Text = text;
+        SaveHintText.Foreground = isWarning
+            ? new SolidColorBrush(Color.FromRgb(0xB3, 0x1C, 0x1C))
+            : new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
     }
 
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        // 有未保存的改动就提醒一次
-        if (_loading || !HasUnsavedChanges()) return;
-
-        var answer = MessageBox.Show(
-            this,
-            Localization.T("msg.unsaved.body"),
-            Localization.T("msg.unsaved.title"),
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning);
-
-        switch (answer)
-        {
-            case MessageBoxResult.Yes:
-                if (!SaveConfig())
-                {
-                    e.Cancel = true;              // 保存失败 / 校验不通过，停在窗口里
-                }
-                break;
-
-            case MessageBoxResult.Cancel:
-                e.Cancel = true;
-                break;
-
-            default:
-                break;                            // 直接丢弃改动退出
-        }
+        // 自动保存是防抖的，关窗口前把还没落盘的那一次补上
+        _autoSaveTimer.Stop();
+        AutoSave();
     }
 
     // --- 服务管理 ---------------------------------------------------------
@@ -652,22 +718,20 @@ public partial class MainWindow : Window
 
     private void OnStopServiceClick(object sender, RoutedEventArgs e)
     {
-        if (!ServiceControl.IsRunning)
+        if (!ServiceControl.IsRunning && !ServiceInstaller.IsInstalled())
         {
             RefreshStatus();
             return;
         }
 
-        ServiceControl.SignalQuit();
-
-        if (ServiceControl.WaitForExit())
+        if (ServiceControl.StopService(out var error))
         {
             MessageBox.Show(this, Localization.T("msg.stopOk.body"),
                 Localization.T("msg.stopOk.title"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
         else
         {
-            MessageBox.Show(this, Localization.T("msg.stopFailed.body", ServiceControl.ServiceExeName),
+            MessageBox.Show(this, Localization.T("msg.stopFailed.body", error),
                 Localization.T("msg.stopFailed.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
@@ -677,13 +741,13 @@ public partial class MainWindow : Window
     /// <summary>
     /// 注册开机自启。
     ///
-    /// 注册"登录时触发、主体是当前用户、登录方式为交互式令牌"的计划任务
-    /// （见 AutoStart.cs），钩子进程由它静默提权启动，全程不弹 UAC。
-    /// 注册与回读校验都在本进程内完成 —— 配置程序已经是管理员，不会被拒。
+    /// 注册一个 LocalSystem 的自动启动服务（见 ServiceInstaller.cs）：开机后由
+    /// SCM 启动服务宿主，服务再把高完整性的钩子进程投递进用户会话 ——
+    /// 静默提权、全程不弹 UAC。注册完顺手清掉旧版本留下的计划任务。
     /// </summary>
     private void OnRegisterServiceClick(object sender, RoutedEventArgs e)
     {
-        if (AutoStart.Install(ServiceControl.ServiceExePath, out var error))
+        if (ServiceInstaller.Install(ServiceControl.ServiceExePath, out var error))
         {
             MessageBox.Show(this, Localization.T("msg.registered.body"),
                 Localization.T("msg.registered.title"), MessageBoxButton.OK, MessageBoxImage.Information);
@@ -703,13 +767,8 @@ public partial class MainWindow : Window
             Localization.T("msg.confirmRemove.title"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes) return;
 
-        if (ServiceControl.IsRunning)
-        {
-            ServiceControl.SignalQuit();
-            ServiceControl.WaitForExit();
-        }
-
-        if (!AutoStart.Remove(out var error))
+        // 停服务 + 从 SCM 删除注册 + 清掉旧版本的计划任务，一次做完
+        if (!ServiceInstaller.Uninstall(out var error))
         {
             MessageBox.Show(this, Localization.T("msg.unregisterFailed.body", error),
                 Localization.T("msg.unregisterFailed.title"), MessageBoxButton.OK, MessageBoxImage.Error);
@@ -724,8 +783,10 @@ public partial class MainWindow : Window
 
     private void RefreshStatus()
     {
+        // running   = 钩子进程在跑（这才代表"按键真的被接管了"）
+        // registered= 服务已注册到 SCM（代表"下次开机自动起来"）
         var running = ServiceControl.IsRunning;
-        var registered = AutoStart.IsRegistered();
+        var registered = ServiceInstaller.IsInstalled();
 
         var autoStartText = registered
             ? Localization.T("status.autostartOn")

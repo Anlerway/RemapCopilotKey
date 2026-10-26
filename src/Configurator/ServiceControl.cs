@@ -10,7 +10,7 @@ namespace RemapCopilotKey.Configurator;
 //   1. 配置文件 —— 配置程序写 config.json，服务程序轮询发现变化后热加载。
 //      这是主要通道，不需要任何 IPC 机制。
 //   2. 窗口消息 —— 少数控制指令（重新加载、退出）直接发给服务程序的隐藏窗口。
-//   3. 计划任务 —— 启动 / 停止服务与开机自启，见 AutoStart.cs。
+//   3. 服务控制 —— 启动 / 停止 / 注册开机自启，走 SCM，见 ServiceInstaller.cs。
 //
 // 消息常量与窗口类名必须与 src/Service/src/main.cpp 保持一致。
 //
@@ -96,10 +96,12 @@ public static class ServiceControl
     /// <summary>
     /// 启动服务。
     ///
-    /// 优先走计划任务（AutoStart.RunServiceTask）：任务是 RunLevel=HighestAvailable，
-    /// 由计划任务服务代为提权启动，**不会弹 UAC**，也不管配置程序本身是什么权限。
-    /// 只有在计划任务还没注册时才退回直接启动 —— 此时配置程序自己已经是管理员，
-    /// 直接 CreateProcess 出来的子进程同样是管理员，也不会弹 UAC。
+    /// 已注册成 SCM 服务时走 SCM（ServiceInstaller.Start）：服务宿主一起来就会
+    /// 立刻把钩子进程投递进当前会话，**不弹 UAC**，因为服务是 LocalSystem。
+    ///
+    /// 还没注册时退回直接启动：配置程序自己已经是管理员，直接 CreateProcess
+    /// 出来的子进程同样是管理员，也不弹 UAC（这个子进程不受服务监督，
+    /// 关掉配置程序后它仍然活着，只是不会跨会话）。
     /// </summary>
     public static bool StartService(out string error)
     {
@@ -111,9 +113,9 @@ public static class ServiceControl
             return false;
         }
 
-        if (AutoStart.IsRegistered())
+        if (ServiceInstaller.IsInstalled())
         {
-            return AutoStart.RunServiceTask(out error);
+            return ServiceInstaller.Start(out error);
         }
 
         try
@@ -131,6 +133,35 @@ public static class ServiceControl
             error = ex.Message;
             return false;
         }
+    }
+
+    /// <summary>
+    /// 停止服务。
+    ///
+    /// 已注册成 SCM 服务时先停服务 —— 服务宿主会顺手结束各会话里的钩子进程，
+    /// 作业对象的 KILL_ON_JOB_CLOSE 再兜一次底 —— 然后确认窗口真的没了。
+    /// 没注册时退回发 WM_RCK_QUIT，请进程自己退出（和旧版本行为一致）。
+    /// </summary>
+    public static bool StopService(out string error)
+    {
+        error = string.Empty;
+
+        if (ServiceInstaller.IsInstalled())
+        {
+            if (!ServiceInstaller.Stop(out error)) return false;
+        }
+
+        if (IsRunning)
+        {
+            SignalQuit();
+            if (!WaitForExit())
+            {
+                error = Localization.T("service.error.stopTimeout");
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>等待服务窗口出现（启动后需要一点时间安装钩子）。</summary>

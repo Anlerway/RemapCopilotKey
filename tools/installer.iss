@@ -10,13 +10,18 @@
 ;   * PrivilegesRequired=admin —— 服务程序与配置程序都要求管理员权限。
 ;   * 安装阶段不检测任何运行环境：.NET Framework 4.8 是 Win10 1903+ / Win11
 ;     系统自带的组件，不需要装。
-;   * 卸载时**不**自动删除开机自启的计划任务：那是用户自己注册的，
-;     应该用配置程序里的「结束并清除服务」来清，卸载器不该擅自动系统任务。
+;   * 开机自启是一个注册在 SCM 里的服务（RemapCopilotKeyAgent，启动类型"自动"）：
+;     安装完直接调 RemapCopilotKey.exe --register-service 注册并启动，
+;     卸载前调 --unregister-service 停服务并从 SCM 删除。
+;     安装 / 卸载都必须是管理员权限，否则 SCM 会直接拒绝（错误 5）。
 ; ---------------------------------------------------------------------------
 
 #define MyAppName "RemapCopilotKey"
 #define MyAppPublisher "Anlerway"
 #define MyAppExeName "RemapCopilotKey.exe"
+; 与 src\Configurator\ServiceInstaller.cs 里的 ServiceName、以及 C++ 侧
+; src\Service\src\ServiceHost.h 里的 kServiceName 必须一字不差
+#define MyServiceName "RemapCopilotKeyAgent"
 #define MyAppUrl "https://github.com/Anlerway/RemapCopilotKey"
 
 #ifndef AppVersion
@@ -83,15 +88,37 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; 先注册自启服务（静默，无窗口），再让用户勾选是否现在启动配置程序。
+; 这一步失败不会让安装失败（服务注册失败时用户还能从界面里手动点「注册服务」），
+; 但会用 StatusMsg 让人看到正在做什么。
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--register-service"; StatusMsg: "Registering auto-start service..."; Flags: runhidden waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; 卸载前清掉服务：停掉服务宿主（它会带走投递出去的钩子进程），再从 SCM 删除。
+; 必须在 [Files] 被删除之前跑 —— exe 还在才能调用它。
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--unregister-service"; Flags: runhidden waituntilterminated; RunOnceId: "UnregisterAutoStartService"
 
 [Code]
 // 安装 / 覆盖 / 卸载前先结束正在运行的进程，否则文件被占用会失败。
-// 服务程序也要一起结束，它同样锁着 RemapCopilotKeyService.exe。
+//
+// 顺序很重要：先停服务，再 taskkill。
+// 服务配了"失败后自动重启"（见 ServiceInstaller.SetRestartOnFailure），
+// 直接 kill 服务宿主会被 SCM 在 5 秒后重新拉起，正好撞上文件复制。
+procedure StopOurService();
+var
+  ResultCode: Integer;
+begin
+  Exec('sc.exe', 'stop {#MyServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // 给它一点时间把投递到会话里的钩子进程收掉
+  Sleep(1500);
+end;
+
 procedure KillOurProcesses();
 var
   ResultCode: Integer;
 begin
+  StopOurService();
   Exec('taskkill.exe', '/IM RemapCopilotKey.exe /T /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/IM RemapCopilotKeyService.exe /T /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

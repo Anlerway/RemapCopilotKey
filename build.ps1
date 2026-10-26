@@ -60,7 +60,9 @@ function Find-VsDevCmd {
     $vswhere = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $vswhere) { throw "vswhere.exe not found. Visual Studio does not appear to be installed." }
 
-    $vsRoot = & $vswhere -latest -products * -property installationPath
+    # -prerelease 是必须的：只装了 Visual Studio 的预览版（Insiders）时，
+    # 不带这个开关 vswhere 什么都不返回，看上去像"没装 VS"。
+    $vsRoot = & $vswhere -latest -prerelease -products * -property installationPath
     if (-not $vsRoot) { throw "vswhere found no Visual Studio installation." }
     $vsRoot = ($vsRoot | Select-Object -First 1).Trim()
     $script:VsRoot = $vsRoot
@@ -113,9 +115,9 @@ function Get-MsBuild {
     return $msbuild.Source
 }
 
-# 32 位 MSBuild，用于带 COM 引用的 C# 工程。
+# 32 位 MSBuild，用于编译配置程序（WPF）。
 #
-# 为什么必须用它：配置程序引用了计划任务的类型库（taskschd），处理 COM 引用的
+# 来历：配置程序以前引用计划任务的类型库（taskschd），处理 COM 引用的
 # ResolveComReference 任务是 **x86** 的。用 amd64 的 MSBuild 时，它必须另起一个
 # x86 任务宿主进程、再走进程间通信去调用；某些受限环境（例如禁止命名管道的沙箱）里
 # 这一步会直接失败：
@@ -123,7 +125,8 @@ function Get-MsBuild {
 #     error MSB4216: 无法运行"ResolveComReference"任务，因为 MSBuild 无法创建或
 #     连接到运行时为"CLR4"、体系结构为"x86"的任务宿主
 #
-# 直接用 32 位 MSBuild 时该任务在**进程内**执行，不需要任务宿主，也就没有这个失败面。
+# 那个 COM 引用已经删掉了（开机自启改走 SCM 的 P/Invoke，见 ServiceInstaller.cs），
+# 理论上现在用 amd64 也行；但 32 位 MSBuild 仍是最不容易出岔子的选择，所以保留。
 # （Visual Studio 自带的 Developer Command Prompt 默认就是 32 位的，行为一致。）
 function Get-MsBuildX86 {
     if ($script:VsRoot) {

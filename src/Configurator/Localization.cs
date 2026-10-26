@@ -50,7 +50,7 @@ public static class Localization
         return s_current.Strings.TryGetValue(key, out var value) ? value : key;
     }
 
-    /// <summary>带格式参数的版本，例如 T("msg.saved.body", path)。</summary>
+    /// <summary>带格式参数的版本，例如 T("status.autoSaved", "14:23:07")。</summary>
     public static string T(string key, params object?[] args)
         => string.Format(T(key), args);
 

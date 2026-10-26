@@ -84,7 +84,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>dwmapi.lib;user32.lib;shell32.lib;advapi32.lib;ole32.lib;shlwapi.lib;gdi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dwmapi.lib;user32.lib;shell32.lib;advapi32.lib;ole32.lib;shlwapi.lib;gdi32.lib;userenv.lib;wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/MANIFESTUAC:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <Manifest>
@@ -117,6 +117,7 @@
     <ClCompile Include="src\CopilotHook.cpp" />
     <ClCompile Include="src\Actions.cpp" />
     <ClCompile Include="src\AutoStart.cpp" />
+    <ClCompile Include="src\ServiceHost.cpp" />
     <ClCompile Include="src\Config.cpp" />
     <ClCompile Include="src\Json.cpp" />
     <ClCompile Include="src\Keys.cpp" />
@@ -127,6 +128,7 @@
     <ClInclude Include="src\CopilotHook.h" />
     <ClInclude Include="src\Actions.h" />
     <ClInclude Include="src\AutoStart.h" />
+    <ClInclude Include="src\ServiceHost.h" />
     <ClInclude Include="src\Config.h" />
     <ClInclude Include="src\Json.h" />
     <ClInclude Include="src\Keys.h" />

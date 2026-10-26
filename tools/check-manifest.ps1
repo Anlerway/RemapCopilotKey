@@ -6,8 +6,8 @@
 .DESCRIPTION
     为什么需要这个检查：
 
-    配置程序必须与 C++ 服务程序**同级提权**运行，否则注册开机自启计划任务
-    会被系统直接拒绝（这正是"注册服务"曾经一直失败的原因）。
+    配置程序必须与 C++ 服务程序**同级提权**运行，否则调 SCM 注册开机自启服务
+    会被系统直接拒绝（错误 5，Access denied）。
     提权要求写在 src\Configurator\app.manifest 里，由编译器用 /win32manifest 嵌进 exe。
 
     这一段曾经出过一次问题：源码里的 app.manifest 明明是 requireAdministrator，
@@ -78,7 +78,7 @@ $level = $levelNode.GetAttribute('level')
 
 if ($level -ne 'requireAdministrator') {
     Write-Host ("[x]  配置程序的提权级别是 '{0}'，期望 'requireAdministrator'。" -f $level) -ForegroundColor Red
-    Write-Host '     这会导致注册开机自启计划任务被系统拒绝（权限不足）。' -ForegroundColor Yellow
+    Write-Host '     这会导致 SCM 拒绝注册开机自启服务（错误 5，权限不足）。' -ForegroundColor Yellow
     Write-Host '     请确认 src\Configurator\app.manifest 里是 requireAdministrator，然后重新构建。' -ForegroundColor Yellow
     exit 1
 }
