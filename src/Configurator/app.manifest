@@ -4,7 +4,7 @@
   <assemblyIdentity
       type="win32"
       name="RemapCopilotKey.Configurator"
-      version="1.0.0.0"
+      version="1.1.0.0"
       processorArchitecture="*"/>
 
   <description>RemapCopilotKey Configurator</description>
