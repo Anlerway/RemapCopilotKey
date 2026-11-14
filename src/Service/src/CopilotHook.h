@@ -17,11 +17,27 @@
 //
 //   打断按下序列的三种情况：其它键按下、任何键松开、100ms 定时器到期。
 //   打断时按原顺序补发被吞掉的 LWin / LShift，保证其它程序看到的事件顺序正确。
+//
+// ★ 只在"孤立的左 Win"上下手（见设计说明 4.7）
+//
+//   笔记本厂商的 Fn 热键同样是以左 Win 开头的事件流，最常见的是
+//   Fn+F5 -> Ctrl+Win+F24（开关触摸板）。这类事件流在按下 Win 时，
+//   键盘上**已经有别的键按着**。
+//
+//   一旦把这种 Win 吞掉，后面只能靠 SendInput 补发 —— 而补发出来的是
+//   **注入事件**（KBDLLHOOKSTRUCT.flags 带 LLKHF_INJECTED）。厂商的驱动 /
+//   服务普遍会丢弃注入事件（防按键精灵那套逻辑），于是
+//       Win 被吞 -> F24 被我们重新注入 -> 厂商热键彻底失效。
+//
+//   所以判定条件改成：只有当按下左 Win 时**键盘上没有任何其它键按着**，
+//   才把它当成 Copilot 序列的起点；否则一个字节都不动，原样放行。
+//   真实 Copilot 键是固件一次性连发的独立按键，永远满足这个条件。
 // ---------------------------------------------------------------------------
 
 #include <windows.h>
 
 #include <functional>
+#include <vector>
 
 namespace rck {
 
@@ -50,7 +66,8 @@ public:
 
     void SetCallback(TriggerCallback callback) { m_callback = std::move(callback); }
 
-    // 关闭时不拦截任何按键（配置里 enabled=false 时使用）
+    // 关闭时不拦截任何按键（配置里 enabled=false 时使用）。
+    // 注意：物理按键状态的跟踪不受它影响，重新打开时状态依然准确。
     void SetEnabled(bool enabled);
     bool IsEnabled() const { return m_enabled; }
 
@@ -66,14 +83,36 @@ public:
 private:
     enum class State { Idle, LeftWindows, LeftShift, F23 };
 
+    // 被吞掉、将来可能要原样补发的按键。附带扫描码与扩展位，
+    // 这样即使 F23 被人用注册表 Scancode Map 改过，补发出去的仍是原键。
+    struct SuppressedKey {
+        WORD vk;
+        WORD scan;
+        bool extended;
+    };
+
     static LRESULT CALLBACK StaticHookProc(int code, WPARAM wParam, LPARAM lParam);
     LRESULT HookProc(int code, WPARAM wParam, LPARAM lParam);
 
     // 返回 true 表示吞掉这个按键
     bool HandleKey(WORD vkCode, WORD scanCode, bool isDown, bool isInjected, bool isExtended);
 
+    // --- 物理按键状态 -------------------------------------------------------
+    // 钩子里查询 GetAsyncKeyState 拿不到"这条事件之前"的状态，而且会被
+    // 我们自己注入的按键污染，所以自己记账：每个键是否按着、除左 Win 外
+    // 还按着几个键。这是"该不该抢左 Win"的唯一依据。
+    void TrackPhysicalKey(WORD vkCode, bool isDown);
+    bool CanStartChord() const;
+
+    // --- 拦截/补发 ----------------------------------------------------------
+    void SuppressKey(WORD vkCode, WORD scanCode, bool extended);
+    bool WasSuppressed(WORD vkCode) const;
+    bool HaveSuppressedKeys() const { return !m_suppressed.empty(); }
     void ReplaySuppressedKeys();
-    bool HaveSuppressedKeys() const;
+    void AbortChord();
+
+    // --- 杂项 ---------------------------------------------------------------
+    void ResetState();
 
     void EnsureChordTimer();
     void CancelChordTimer();
@@ -88,8 +127,15 @@ private:
     State m_pressState   = State::Idle;
     State m_releaseState = State::Idle;
 
-    bool m_leftWindowsSuppressed = false;
-    bool m_leftShiftSuppressed   = false;
+    // 按下序列里已经被吞掉、等着补发的键（最多两个：左 Win、左 Shift）
+    std::vector<SuppressedKey> m_suppressed;
+
+    // 物理按键状态（只统计非注入事件）
+    bool m_keyDown[256]  = {};
+    int  m_otherKeysDown = 0;      // 除左 Win 之外按着的键数
+
+    // 补发之后的一小段"不再抢左 Win"的冷却期，见 kReplayGuardMs
+    DWORD m_passthroughUntil = 0;
 
     bool m_chordTimerActive = false;
 };

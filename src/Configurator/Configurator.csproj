@@ -25,7 +25,7 @@
     <Description>把 Copilot 键映射成任意按键、组合键、应用程序、网页或 Windows 实用功能</Description>
     <Copyright>https://github.com/Anlerway/RemapCopilotKey</Copyright>
     <RepositoryUrl>https://github.com/Anlerway/RemapCopilotKey</RepositoryUrl>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
 
     <ApplicationManifest>app.manifest</ApplicationManifest>
 

@@ -26,12 +26,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "Anlerway"
             VALUE "FileDescription",  "RemapCopilotKey Service"
-            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "FileVersion",      "1.1.0.0"
             VALUE "InternalName",     "RemapCopilotKeyService"
             VALUE "LegalCopyright",   "https://github.com/Anlerway/RemapCopilotKey"
             VALUE "OriginalFilename", "RemapCopilotKeyService.exe"
             VALUE "ProductName",      "RemapCopilotKey"
-            VALUE "ProductVersion",   "1.0.0.0"
+            VALUE "ProductVersion",   "1.1.0.0"
             VALUE "Comments",         "https://github.com/Anlerway/RemapCopilotKey"
         END
     END
